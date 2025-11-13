@@ -3,3 +3,4 @@ numpy
 torchvision
 django
 djangorestframework
+django-cors-headers

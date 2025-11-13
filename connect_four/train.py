@@ -48,6 +48,47 @@ def check_winner(board):
     return 0
 
 
+def check_winner_type(board):
+    """
+    Check if there's a winner and return the win type.
+
+    Returns:
+        tuple: (winner, win_type) where winner is 1/-1/0 and 
+               win_type is 'horizontal', 'vertical', 'diagonal_right', 'diagonal_left', or None
+    """
+    rows, cols = board.shape
+
+    # Check horizontal
+    for row in range(rows):
+        for col in range(cols - 3):
+            window = board[row, col : col + 4]
+            if abs(window.sum()) == 4:
+                return int(np.sign(window.sum())), 'horizontal'
+
+    # Check vertical
+    for row in range(rows - 3):
+        for col in range(cols):
+            window = board[row : row + 4, col]
+            if abs(window.sum()) == 4:
+                return int(np.sign(window.sum())), 'vertical'
+
+    # Check diagonal (down-right)
+    for row in range(rows - 3):
+        for col in range(cols - 3):
+            window = [board[row + i, col + i] for i in range(4)]
+            if abs(sum(window)) == 4:
+                return int(np.sign(sum(window))), 'diagonal_right'
+
+    # Check diagonal (down-left)
+    for row in range(rows - 3):
+        for col in range(3, cols):
+            window = [board[row + i, col - i] for i in range(4)]
+            if abs(sum(window)) == 4:
+                return int(np.sign(sum(window))), 'diagonal_left'
+
+    return 0, None
+
+
 def get_valid_moves(board):
     """Get list of valid column indices where a piece can be placed."""
     cols = board.shape[1]
@@ -57,30 +98,48 @@ def get_valid_moves(board):
 def check_threat(board, player):
     """
     Check if there's a 3-in-a-row threat for the given player.
-    Returns True if player has 3 in a row with an empty 4th spot.
+    Returns True if player has 3 in a row with an empty 4th spot that is playable.
 
     Args:
         board: Current board state
         player: Player to check threats for (1 or -1)
 
     Returns:
-        True if player has a threat (3 in a row), False otherwise
+        True if player has a threat (3 in a row with playable 4th spot), False otherwise
     """
     rows, cols = board.shape
+
+    def is_playable(row, col):
+        """Check if a position is playable (empty and either bottom row or has support below)"""
+        if board[row, col] != 0:
+            return False
+        # Bottom row is always playable
+        if row == rows - 1:
+            return True
+        # Otherwise needs support below
+        return board[row + 1, col] != 0
 
     # Check horizontal threats
     for row in range(rows):
         for col in range(cols - 3):
             window = board[row, col : col + 4]
             if np.sum(window == player) == 3 and np.sum(window == 0) == 1:
-                return True
+                # Find which position is empty and check if it's playable
+                for i in range(4):
+                    if board[row, col + i] == 0:
+                        if is_playable(row, col + i):
+                            return True
 
     # Check vertical threats
     for row in range(rows - 3):
         for col in range(cols):
             window = board[row : row + 4, col]
             if np.sum(window == player) == 3 and np.sum(window == 0) == 1:
-                return True
+                # Find which position is empty and check if it's playable
+                for i in range(4):
+                    if board[row + i, col] == 0:
+                        if is_playable(row + i, col):
+                            return True
 
     # Check diagonal threats (down-right)
     for row in range(rows - 3):
@@ -90,7 +149,11 @@ def check_threat(board, player):
                 sum(1 for x in window if x == player) == 3
                 and sum(1 for x in window if x == 0) == 1
             ):
-                return True
+                # Find which position is empty and check if it's playable
+                for i in range(4):
+                    if board[row + i, col + i] == 0:
+                        if is_playable(row + i, col + i):
+                            return True
 
     # Check diagonal threats (down-left)
     for row in range(rows - 3):
@@ -100,9 +163,254 @@ def check_threat(board, player):
                 sum(1 for x in window if x == player) == 3
                 and sum(1 for x in window if x == 0) == 1
             ):
-                return True
+                # Find which position is empty and check if it's playable
+                for i in range(4):
+                    if board[row + i, col - i] == 0:
+                        if is_playable(row + i, col - i):
+                            return True
 
     return False
+
+
+def count_threats(board, player):
+    """
+    Count the number of 3-in-a-row threats for the given player.
+    A threat is 3 in a row with an empty 4th spot that is playable.
+
+    Args:
+        board: Current board state
+        player: Player to check threats for (1 or -1)
+
+    Returns:
+        Number of threats found
+    """
+    rows, cols = board.shape
+    threat_count = 0
+
+    def is_playable(row, col):
+        """Check if a position is playable (empty and either bottom row or has support below)"""
+        if board[row, col] != 0:
+            return False
+        if row == rows - 1:
+            return True
+        return board[row + 1, col] != 0
+
+    # Check horizontal threats
+    for row in range(rows):
+        for col in range(cols - 3):
+            window = board[row, col : col + 4]
+            if np.sum(window == player) == 3 and np.sum(window == 0) == 1:
+                for i in range(4):
+                    if board[row, col + i] == 0:
+                        if is_playable(row, col + i):
+                            threat_count += 1
+                            break
+
+    # Check vertical threats
+    for row in range(rows - 3):
+        for col in range(cols):
+            window = board[row : row + 4, col]
+            if np.sum(window == player) == 3 and np.sum(window == 0) == 1:
+                for i in range(4):
+                    if board[row + i, col] == 0:
+                        if is_playable(row + i, col):
+                            threat_count += 1
+                            break
+
+    # Check diagonal threats (down-right)
+    for row in range(rows - 3):
+        for col in range(cols - 3):
+            window = [board[row + i, col + i] for i in range(4)]
+            if (
+                sum(1 for x in window if x == player) == 3
+                and sum(1 for x in window if x == 0) == 1
+            ):
+                for i in range(4):
+                    if board[row + i, col + i] == 0:
+                        if is_playable(row + i, col + i):
+                            threat_count += 1
+                            break
+
+    # Check diagonal threats (down-left)
+    for row in range(rows - 3):
+        for col in range(3, cols):
+            window = [board[row + i, col - i] for i in range(4)]
+            if (
+                sum(1 for x in window if x == player) == 3
+                and sum(1 for x in window if x == 0) == 1
+            ):
+                for i in range(4):
+                    if board[row + i, col - i] == 0:
+                        if is_playable(row + i, col - i):
+                            threat_count += 1
+                            break
+
+    return threat_count
+
+
+def count_two_in_a_row(board, player):
+    """
+    Count the number of 2-in-a-row opportunities for the given player.
+    An opportunity is 2 in a row with at least one playable empty spot adjacent.
+
+    Args:
+        board: Current board state
+        player: Player to check for (1 or -1)
+
+    Returns:
+        Number of 2-in-a-row opportunities found
+    """
+    rows, cols = board.shape
+    count = 0
+
+    def is_playable(row, col):
+        """Check if a position is playable"""
+        if row < 0 or col < 0 or row >= rows or col >= cols:
+            return False
+        if board[row, col] != 0:
+            return False
+        if row == rows - 1:
+            return True
+        return board[row + 1, col] != 0
+
+    # Check horizontal 2-in-a-row (with room to extend)
+    for row in range(rows):
+        for col in range(cols - 3):
+            window = board[row, col : col + 4]
+            if np.sum(window == player) == 2 and np.sum(window == 0) == 2:
+                # Check if any empty spot is playable
+                has_playable = False
+                for i in range(4):
+                    if board[row, col + i] == 0 and is_playable(row, col + i):
+                        has_playable = True
+                        break
+                if has_playable:
+                    count += 1
+
+    # Check vertical 2-in-a-row
+    for row in range(rows - 3):
+        for col in range(cols):
+            window = board[row : row + 4, col]
+            if np.sum(window == player) == 2 and np.sum(window == 0) == 2:
+                has_playable = False
+                for i in range(4):
+                    if board[row + i, col] == 0 and is_playable(row + i, col):
+                        has_playable = True
+                        break
+                if has_playable:
+                    count += 1
+
+    # Check diagonal 2-in-a-row (down-right)
+    for row in range(rows - 3):
+        for col in range(cols - 3):
+            window = [board[row + i, col + i] for i in range(4)]
+            if (
+                sum(1 for x in window if x == player) == 2
+                and sum(1 for x in window if x == 0) == 2
+            ):
+                has_playable = False
+                for i in range(4):
+                    if board[row + i, col + i] == 0 and is_playable(row + i, col + i):
+                        has_playable = True
+                        break
+                if has_playable:
+                    count += 1
+
+    # Check diagonal 2-in-a-row (down-left)
+    for row in range(rows - 3):
+        for col in range(3, cols):
+            window = [board[row + i, col - i] for i in range(4)]
+            if (
+                sum(1 for x in window if x == player) == 2
+                and sum(1 for x in window if x == 0) == 2
+            ):
+                has_playable = False
+                for i in range(4):
+                    if board[row + i, col - i] == 0 and is_playable(row + i, col - i):
+                        has_playable = True
+                        break
+                if has_playable:
+                    count += 1
+
+    return count
+
+
+def get_blocking_columns(board, player):
+    """
+    Get all columns that would block a 4-in-a-row for the given player.
+    
+    Args:
+        board: Current board state
+        player: Player to check blocking moves for (1 or -1)
+    
+    Returns:
+        List of column indices that would block a potential 4-in-a-row
+    """
+    rows, cols = board.shape
+    blocking_cols = set()
+    
+    def is_playable(row, col):
+        """Check if a position is playable (empty and either bottom row or has support below)"""
+        if board[row, col] != 0:
+            return False
+        # Bottom row is always playable
+        if row == rows - 1:
+            return True
+        # Otherwise needs support below
+        return board[row + 1, col] != 0
+    
+    # Check horizontal windows
+    for row in range(rows):
+        for col in range(cols - 3):
+            window = board[row, col : col + 4]
+            if np.sum(window == player) == 3 and np.sum(window == 0) == 1:
+                # Find which position is empty and check if it's playable
+                for i in range(4):
+                    if board[row, col + i] == 0:
+                        if is_playable(row, col + i):
+                            blocking_cols.add(col + i)
+    
+    # Check vertical windows
+    for row in range(rows - 3):
+        for col in range(cols):
+            window = board[row : row + 4, col]
+            if np.sum(window == player) == 3 and np.sum(window == 0) == 1:
+                # Find which position is empty and check if it's playable
+                for i in range(4):
+                    if board[row + i, col] == 0:
+                        if is_playable(row + i, col):
+                            blocking_cols.add(col)
+    
+    # Check diagonal windows (down-right)
+    for row in range(rows - 3):
+        for col in range(cols - 3):
+            window = [board[row + i, col + i] for i in range(4)]
+            if (
+                sum(1 for x in window if x == player) == 3
+                and sum(1 for x in window if x == 0) == 1
+            ):
+                # Find which position is empty and check if it's playable
+                for i in range(4):
+                    if board[row + i, col + i] == 0:
+                        if is_playable(row + i, col + i):
+                            blocking_cols.add(col + i)
+    
+    # Check diagonal windows (down-left)
+    for row in range(rows - 3):
+        for col in range(3, cols):
+            window = [board[row + i, col - i] for i in range(4)]
+            if (
+                sum(1 for x in window if x == player) == 3
+                and sum(1 for x in window if x == 0) == 1
+            ):
+                # Find which position is empty and check if it's playable
+                for i in range(4):
+                    if board[row + i, col - i] == 0:
+                        if is_playable(row + i, col - i):
+                            blocking_cols.add(col - i)
+    
+    return sorted(list(blocking_cols))
+
 
 def count_threes(board, player):
     """Count number of *open* 3-in-a-row windows for player (possible to become 4)."""
@@ -153,33 +461,61 @@ def calculate_reward(board, prev_board, col, player, winner, is_done):
 
     opponent = -player
 
-    # 1. Block opponent threats (3 in a row)
-    if check_threat(prev_board, opponent) and not check_threat(board, opponent):
-        reward += 0.7
-
-    # 2. Create your own threats
-    if check_threat(board, player):
-        reward += 0.3
-
-    # 3. Prevent opponent from winning next move
-    # Look ahead one move: if opponent could win next turn, reward blocking it
+    # 1. Prevent opponent from winning next move (HIGHEST PRIORITY)
+    # Look ahead one move: if opponent could win next turn, heavily reward blocking it
+    blocked_win = False
     for c in get_valid_moves(board):
         test_board = board.copy()
         apply_move(test_board, c, opponent)
         if check_winner(test_board) == opponent:
             if c == col:
-                reward += 0.9  # blocked imminent win
+                reward += 2.0  # blocked imminent win - CRITICAL!
+                blocked_win = True
             else:
-                reward -= 0.2  # didn’t block imminent win
+                reward -= 0.5  # didn't block imminent win - PUNISH HARDER
 
-    # 4. Encourage central columns
+    # 2. Reward for reducing opponent's 3-in-a-row threats
+    if not blocked_win:
+        prev_opponent_threats = count_threats(prev_board, opponent)
+        curr_opponent_threats = count_threats(board, opponent)
+        
+        # Reward for eliminating opponent threats
+        if prev_opponent_threats > curr_opponent_threats:
+            threats_stopped = prev_opponent_threats - curr_opponent_threats
+            reward += 0.6 * threats_stopped  # Reward per threat stopped
+        
+        # Legacy check_threat bonus (keep for backward compatibility)
+        if check_threat(prev_board, opponent) and not check_threat(board, opponent):
+            reward += 0.2  # Additional small bonus
+
+    # 3. Create your own threats
+    prev_player_threats = count_threats(prev_board, player)
+    curr_player_threats = count_threats(board, player)
+    
+    if curr_player_threats > prev_player_threats:
+        new_threats = curr_player_threats - prev_player_threats
+        reward += 0.4 * new_threats  # Reward per new threat created
+
+    # 4. Early intervention: Reward blocking opponent's 2-in-a-row (proactive defense)
+    prev_opponent_two = count_two_in_a_row(prev_board, opponent)
+    curr_opponent_two = count_two_in_a_row(board, opponent)
+    
+    if prev_opponent_two > curr_opponent_two:
+        two_stopped = prev_opponent_two - curr_opponent_two
+        reward += 0.3 * two_stopped  # Reward early blocking
+    
+    # 5. Reward creating your own 2-in-a-row (building offensive positions)
+    prev_player_two = count_two_in_a_row(prev_board, player)
+    curr_player_two = count_two_in_a_row(board, player)
+    
+    if curr_player_two > prev_player_two:
+        two_created = curr_player_two - prev_player_two
+        reward += 0.2 * two_created  # Reward building positions
+
+    # 6. Encourage central columns
     center_col = board.shape[1] // 2
     if col == center_col:
         reward += 0.05
-
-    # 5. Optional: reward longer chains (2 or 3 in a row)
-    # (could implement by scanning board for 2/3 consecutive pieces)
-    # e.g. reward += 0.1 for each 2-in-a-row created
 
     return reward
 
@@ -192,45 +528,76 @@ def check_winner_after_move(board, player, col):
     return check_winner(tmp) == player
 
 
-def select_move(model, board, player, epsilon=0.1):
-    """
-    Select a move using epsilon-greedy strategy.
-
-    Args:
-        model: The neural network model
-        board: Current board state
-        player: Current player (1 or -1)
-        epsilon: Exploration rate
-
-    Returns:
-        Selected column index
-    """
-    valid_moves = get_valid_moves(board)
-
-    if not valid_moves:
-        return None
-
-    # Exploration: random move
-    if random.random() < epsilon:
-        return random.choice(valid_moves)
-
-    # Exploitation: use model
+def select_move(model, board, epsilon, valid_moves, device='cpu'):
+    """Select a move using epsilon-greedy policy."""
+    if np.random.random() < epsilon:
+        return np.random.choice(valid_moves)
+    
     model.eval()
     with torch.no_grad():
-        # Prepare board for model (from player's perspective)
-        board_input = board * player  # Flip perspective for player -1
-        tensor_board = board_to_tensor(board_input).unsqueeze(0).unsqueeze(0)
+        # Convert board to tensor and flatten to 1D
+        state = board_to_tensor(board).flatten().unsqueeze(0).to(device)
+        q_values = model(state).cpu().numpy()[0]
+    model.train()
+    
+    # Mask invalid moves
+    q_values_masked = q_values.copy()
+    for col in range(7):
+        if col not in valid_moves:
+            q_values_masked[col] = -np.inf
+    
+    return np.argmax(q_values_masked)
 
-        q_values = model(tensor_board).squeeze()
-
-        # Mask invalid moves
-        mask = torch.full((7,), float("-inf"))
-        mask[valid_moves] = 0
-        q_values = q_values + mask
-
-        return q_values.argmax().item()
-
-
+def select_move_blocking(model, board, player, epsilon, valid_moves, device='cpu'):
+    """Select a move with blocking logic."""
+    opponent = -player
+    
+    # 1. Check if we can win immediately
+    for col in valid_moves:
+        test_board = board.copy()
+        row = np.where(test_board[:, col] == 0)[0]
+        if len(row) > 0:
+            test_board[row[-1], col] = player
+            if check_winner(test_board) == player:
+                return col
+    
+    # 2. Check if opponent has a threat and if we can block it
+    if check_threat(board, opponent):
+        blocking_cols = get_blocking_columns(board, opponent)
+        valid_blocking = [col for col in blocking_cols if col in valid_moves]
+        
+        if valid_blocking:
+            # If multiple blocking moves, prefer ones that create our own threats
+            best_block = valid_blocking[0]
+            for col in valid_blocking:
+                test_board = board.copy()
+                row = np.where(test_board[:, col] == 0)[0]
+                if len(row) > 0:
+                    test_board[row[-1], col] = player
+                    if check_threat(test_board, player):
+                        best_block = col
+                        break
+            return best_block
+    
+    # 3. Use model for normal play
+    model.eval()
+    with torch.no_grad():
+        # Convert board to tensor and flatten to 1D
+        state = board_to_tensor(board).flatten().unsqueeze(0).to(device)
+        q_values = model(state).cpu().numpy()[0]
+    model.train()
+    
+    # Apply epsilon-greedy
+    if np.random.random() < epsilon:
+        return np.random.choice(valid_moves)
+    
+    # Mask invalid moves
+    q_values_masked = q_values.copy()
+    for col in range(7):
+        if col not in valid_moves:
+            q_values_masked[col] = -np.inf
+    
+    return np.argmax(q_values_masked)
 def play_game(
     model1,
     model2,
@@ -239,15 +606,19 @@ def play_game(
     verbose=False,
     starting_player=1,
     random_opponent=False,
+    use_blocking_opponent=False,
 ):
     """
     Play a single game between two models.
 
     Args:
         starting_player: Which player goes first (1 or -1)
+        random_opponent: If True, player 2 plays randomly
+        use_blocking_opponent: If True, player 2 uses blocking strategy
 
     Returns:
-        List of (state, action, reward, next_state, done, player) tuples
+        tuple: (game_history, winner, win_type) where game_history is list of tuples,
+               winner is 1/-1/0, and win_type is the type of win or None
     """
     board = create_board()
     game_history = []
@@ -262,9 +633,13 @@ def play_game(
         # Select and apply move
         if random_opponent and current_player == -1:
             col = random.choice(get_valid_moves(board))
+        elif use_blocking_opponent and current_player == -1:
+            col = select_move_blocking(
+                models[current_player], board, current_player, epsilons[current_player], get_valid_moves(board)
+            )
         else:
             col = select_move(
-                models[current_player], board, current_player, epsilons[current_player]
+                models[current_player], board, epsilons[current_player], get_valid_moves(board)
             )
 
         if col is None:  # Board is full
@@ -284,7 +659,7 @@ def play_game(
                     True,
                     prev_player,
                 )
-            break
+            return game_history, 0, None
 
         prev_board = state.copy()
         success, row = apply_move(board, col, current_player)
@@ -292,10 +667,10 @@ def play_game(
         if not success:
             reward = -0.5
             game_history.append((state, col, reward, board.copy(), False, current_player))
-            break
+            return game_history, 0, None
 
-        # Check for winner
-        winner = check_winner(board)
+        # Check for winner with type
+        winner, win_type = check_winner_type(board)
         is_done = winner != 0
 
         # Calculate reward using the new reward function
@@ -309,7 +684,7 @@ def play_game(
                 if winner == current_player:
                     print(f"\nPlayer {current_player} wins!")
                 print_board(board)
-            break
+            return game_history, winner, win_type
 
         # Switch player
         current_player *= -1
@@ -331,7 +706,7 @@ def play_game(
             print("\nGame ended in a draw!")
             print_board(board)
 
-    return game_history, winner
+    return game_history, 0, None
 
 
 def train_step(model, target_model, optimizer, batch, gamma=0.99, device='cpu'):
@@ -339,9 +714,9 @@ def train_step(model, target_model, optimizer, batch, gamma=0.99, device='cpu'):
     # Unpack batch
     states, actions, rewards, next_states, dones, players = zip(*batch)
 
-    # tensors (move to device)
-    states_tensor = torch.stack([board_to_tensor(s * p).unsqueeze(0) for s, p in zip(states, players)]).to(device)
-    next_states_tensor = torch.stack([board_to_tensor(ns * p).unsqueeze(0) for ns, p in zip(next_states, players)]).to(device)
+    # Convert boards to tensors and flatten to 1D (batch_size, 42)
+    states_tensor = torch.stack([board_to_tensor(s * p).flatten() for s, p in zip(states, players)]).to(device)
+    next_states_tensor = torch.stack([board_to_tensor(ns * p).flatten() for ns, p in zip(next_states, players)]).to(device)
     actions_tensor = torch.LongTensor(actions).to(device)
     rewards_tensor = torch.FloatTensor(rewards).to(device)
     dones_tensor = torch.FloatTensor(dones).to(device)
@@ -392,6 +767,7 @@ def train(
     epsilon_end=0.1,
     epsilon_decay=0.995,
     target_update_freq=100,
+    use_cuda=True,
 ):
     """
     Train the model using DQN with self-play and target network.
@@ -405,10 +781,31 @@ def train(
         epsilon_end: Minimum exploration rate
         epsilon_decay: Decay rate for epsilon
         target_update_freq: How often to update target network (in episodes)
+        use_cuda: If True, use CUDA for GPU acceleration (if available)
     """
+    # Set up device
+    if use_cuda and torch.cuda.is_available():
+        device = torch.device('cuda')
+        print(f"Attempting to use CUDA GPU: {torch.cuda.get_device_name(0)}")
+        
+        # Test if CUDA actually works with a simple operation
+        try:
+            test_tensor = torch.zeros(1).to(device)
+            _ = test_tensor + 1
+            print(f"✓ CUDA is working properly")
+        except RuntimeError as e:
+            print(f"✗ CUDA error detected: {e}")
+            print(f"Falling back to CPU")
+            device = torch.device('cpu')
+    else:
+        device = torch.device('cpu')
+        if use_cuda:
+            print("CUDA requested but not available")
+        print("Using CPU")
+    
     # Create main model and target model
-    model = ConnectFourModel()
-    target_model = ConnectFourModel()
+    model = ConnectFourModel().to(device)
+    target_model = ConnectFourModel().to(device)
     target_model.load_state_dict(model.state_dict())  # Initialize with same weights
     target_model.eval()  # Target network is not trained directly
 
@@ -418,37 +815,84 @@ def train(
     epsilon = epsilon_start
 
     wins = {1: 0, -1: 0, 0: 0}  # Track wins, losses, draws
+    win_types = {'horizontal': 0, 'vertical': 0, 'diagonal_right': 0, 'diagonal_left': 0}  # Track win types
+    model_as_p1_wins = 0  # Track model wins as Player 1
+    model_as_p2_wins = 0  # Track model wins as Player 2
+    model_as_p1_losses = 0  # Track model losses as Player 1
+    model_as_p2_losses = 0  # Track model losses as Player 2
+    total_model_games = 0
+    game_lengths = []  # Track number of turns per game
 
     print("Starting DQN self-play training...")
     print(f"Target network will update every {target_update_freq} episodes\n")
 
     for episode in range(num_episodes):
-        # Alternate which player goes first to balance training
-        random_opponent = random.random() < 0.3
+        # Mix different opponent types for better training
+        opponent_type = random.random()
+        random_opponent = opponent_type < 0.15  # 15% random
+        use_blocking_opponent = 0.15 <= opponent_type < 0.40  # 25% blocking opponent
+        # 60% normal opponent (target network without special strategies)
 
-        starting_player = 1 if episode % 2 == 0 else -1
-
-        # Play against target network (frozen version provides stable opponent)
-        game_history, winner = play_game(
-            model,
-            target_model,
-            epsilon,
-            0.0,
-            verbose=False,
-            starting_player=starting_player,
-            random_opponent=random_opponent,
-        )
+        # Alternate which player the main model controls
+        # Model plays as Player 1 (goes first) in even episodes
+        # Model plays as Player 2 (goes second) in odd episodes
+        if episode % 2 == 0:
+            # Main model is Player 1, target is Player 2
+            game_history, winner, win_type = play_game(
+                model,
+                target_model,
+                epsilon,  # main model explores
+                0.0,      # target doesn't explore
+                verbose=False,
+                starting_player=1,  # P1 always goes first
+                random_opponent=random_opponent,
+                use_blocking_opponent=use_blocking_opponent,
+            )
+            model_position = 1
+        else:
+            # Target is Player 1, main model is Player 2
+            game_history, winner, win_type = play_game(
+                target_model,
+                model,
+                0.0,      # target doesn't explore
+                epsilon,  # main model explores
+                verbose=False,
+                starting_player=1,  # P1 always goes first
+                random_opponent=False,  # Don't make P1 random when it's the target
+                use_blocking_opponent=False,  # Don't give P1 blocking advantage
+            )
+            model_position = -1
 
         # Add to replay buffer
         replay_buffer.extend(game_history)
 
+        # Track game length (number of moves)
+        game_lengths.append(len(game_history))
+
         # Track statistics
         wins[winner] += 1
+        if win_type:
+            win_types[win_type] += 1
+        
+        # Track model performance in both positions
+        total_model_games += 1
+        if model_position == 1:
+            # Model was Player 1
+            if winner == 1:
+                model_as_p1_wins += 1
+            elif winner == -1:
+                model_as_p1_losses += 1
+        else:
+            # Model was Player 2
+            if winner == -1:
+                model_as_p2_wins += 1
+            elif winner == 1:
+                model_as_p2_losses += 1
 
         # Train if we have enough samples
         if len(replay_buffer) >= batch_size:
             batch = random.sample(replay_buffer, batch_size)
-            loss = train_step(model, target_model, optimizer, batch, gamma)
+            loss = train_step(model, target_model, optimizer, batch, gamma, device)
         else:
             loss = 0.0
 
@@ -463,27 +907,65 @@ def train(
         # Print progress
         if (episode + 1) % 100 == 0:
             total_games = sum(wins.values())
+            total_wins = sum(win_types.values())
             print(f"Episode {episode + 1}/{num_episodes}")
             print(f"  Epsilon: {epsilon:.4f}")
             print(f"  Loss: {loss:.4f}")
             print(
                 f"  Win rates - P1: {wins[1]/total_games:.2%}, P2: {wins[-1]/total_games:.2%}, Draw: {wins[0]/total_games:.2%}"
             )
+            # Show model performance in both positions
+            p1_games = total_model_games // 2 + (total_model_games % 2)
+            p2_games = total_model_games // 2
+            if p1_games > 0:
+                p1_draws = p1_games - model_as_p1_wins - model_as_p1_losses
+                print(f"  Model as P1: {model_as_p1_wins}W-{model_as_p1_losses}L-{p1_draws}D ({model_as_p1_wins/p1_games:.1%} wins, {model_as_p1_losses/p1_games:.1%} losses)")
+            if p2_games > 0:
+                p2_draws = p2_games - model_as_p2_wins - model_as_p2_losses
+                print(f"  Model as P2: {model_as_p2_wins}W-{model_as_p2_losses}L-{p2_draws}D ({model_as_p2_wins/p2_games:.1%} wins, {model_as_p2_losses/p2_games:.1%} losses)")
+            # Show game length statistics
+            if game_lengths:
+                min_length = min(game_lengths)
+                max_length = max(game_lengths)
+                avg_length = sum(game_lengths) / len(game_lengths)
+                print(f"  Game length: min={min_length}, max={max_length}, avg={avg_length:.1f} moves")
+            if total_wins > 0:
+                print(f"  Win types:")
+                print(f"    Horizontal:     {win_types['horizontal']:3d} ({win_types['horizontal']/total_wins:.1%})")
+                print(f"    Vertical:       {win_types['vertical']:3d} ({win_types['vertical']/total_wins:.1%})")
+                print(f"    Diagonal Right: {win_types['diagonal_right']:3d} ({win_types['diagonal_right']/total_wins:.1%})")
+                print(f"    Diagonal Left:  {win_types['diagonal_left']:3d} ({win_types['diagonal_left']/total_wins:.1%})")
             print(f"  Replay buffer size: {len(replay_buffer)}")
             wins = {1: 0, -1: 0, 0: 0}  # Reset stats
+            win_types = {'horizontal': 0, 'vertical': 0, 'diagonal_right': 0, 'diagonal_left': 0}  # Reset win types
+            model_as_p1_wins = 0
+            model_as_p2_wins = 0
+            model_as_p1_losses = 0
+            model_as_p2_losses = 0
+            total_model_games = 0
+            game_lengths = []  # Reset game lengths
 
     print("\nTraining complete!")
     return model
 
 
-def play_human_vs_model(model):
+def play_human_vs_model(model, use_blocking=False, verbose=False):
     """
     Play a game against the trained model.
+    
+    Args:
+        model: The trained model to play against
+        use_blocking: If True, use the blocking strategy for AI
+        verbose: If True, show AI's decision-making process
     """
     board = create_board()
     current_player = 1  # Human is player 1
 
     print("\nYou are X (Player 1), AI is O (Player -1)")
+    if use_blocking:
+        print("AI is using blocking strategy")
+    if verbose:
+        print("Verbose mode: ON\n")
     print_board(board)
 
     while True:
@@ -493,6 +975,15 @@ def play_human_vs_model(model):
             if not valid_moves:
                 print("Board is full! Draw!")
                 break
+
+            # Show if AI has threats
+            if verbose:
+                ai_threats = get_blocking_columns(board, -1)
+                if ai_threats:
+                    print(f"[Info] AI threatens to win in columns: {ai_threats}")
+                human_threats = get_blocking_columns(board, 1)
+                if human_threats:
+                    print(f"[Info] You threaten to win in columns: {human_threats}")
 
             while True:
                 try:
@@ -505,7 +996,10 @@ def play_human_vs_model(model):
                     print("Please enter a number between 0 and 6.")
         else:
             # AI move
-            col = select_move(model, board, current_player, epsilon=0.0)
+            if use_blocking:
+                col = select_move_blocking(model, board, current_player, epsilon=0.0, valid_moves=get_valid_moves(board))
+            else:
+                col = select_move(model, board, current_player, epsilon=0.0, valid_moves=get_valid_moves(board))
             if col is None:
                 print("Board is full! Draw!")
                 break
@@ -525,35 +1019,89 @@ def play_human_vs_model(model):
         current_player *= -1
 
 
-if __name__ == "__main__":
-    # Train the model with DQN
-    # trained_model = train(
-    #     num_episodes=10000,
-    #     batch_size=64,
-    #     learning_rate=0.001,
-    #     gamma=0.99,
-    #     epsilon_start=1.0,
-    #     epsilon_end=0.05,
-    #     epsilon_decay=0.995,
-    #     target_update_freq=100,
-    # )
+# Add this diagnostic function to see how well the model actually plays
 
-    # # Save the model
-    # torch.save(trained_model.state_dict(), "connect_four_model.pth")
-    # print("Model saved to connect_four_model.pth")
-
-    # # Optional: Play against the model
-    # play_choice = input(
-    #     "\nWould you like to play against the trained model? (yes/no): "
-    # )
+def evaluate_model(model, num_games=100, device='cpu'):
+    """
+    Evaluate model performance against different opponents.
+    """
+    model.eval()
     
-    # # Load the trained model weights
-    # trained_model.load_state_dict(torch.load("connect_four_model.pth"))
-    # if play_choice.lower() in ["yes", "y"]:
-    #     play_human_vs_model(trained_model)
+    results = {
+        'vs_random': {'wins': 0, 'losses': 0, 'draws': 0},
+        'vs_blocking': {'wins': 0, 'losses': 0, 'draws': 0}
+    }
+    
+    # Test against random opponent
+    for _ in range(num_games):
+        _, winner, _ = play_game(model, model, epsilon=0.0, random_opponent=True, device=device)
+        if winner == 1:
+            results['vs_random']['wins'] += 1
+        elif winner == -1:
+            results['vs_random']['losses'] += 1
+        else:
+            results['vs_random']['draws'] += 1
+    
+    # Test against blocking opponent
+    for _ in range(num_games):
+        _, winner, _ = play_game(model, model, epsilon=0.0, use_blocking_opponent=True, device=device)
+        if winner == 1:
+            results['vs_blocking']['wins'] += 1
+        elif winner == -1:
+            results['vs_blocking']['losses'] += 1
+        else:
+            results['vs_blocking']['draws'] += 1
+    
+    print(f"\nModel Evaluation ({num_games} games each):")
+    print(f"  vs Random:   {results['vs_random']['wins']}W-{results['vs_random']['losses']}L-{results['vs_random']['draws']}D ({100*results['vs_random']['wins']/num_games:.1f}% win rate)")
+    print(f"  vs Blocking: {results['vs_blocking']['wins']}W-{results['vs_blocking']['losses']}L-{results['vs_blocking']['draws']}D ({100*results['vs_blocking']['wins']/num_games:.1f}% win rate)")
+    
+    model.train()
+    return results
 
-    # load the trained model weights
-    trained_model = ConnectFourModel()
-    trained_model.load_state_dict(torch.load("connect_four_model.pth"))
 
-    play_human_vs_model(trained_model)
+if __name__ == "__main__":
+    trained_model = None
+    print(f"PyTorch version: {torch.__version__}")
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"CUDA version: {torch.version.cuda}")
+        print(f"GPU device: {torch.cuda.get_device_name(0)}")
+    print()
+    
+    # Train the model with DQN
+    trained_model = train(
+        num_episodes=5000,
+        batch_size=64,
+        learning_rate=0.001,
+        gamma=0.99,
+        epsilon_start=1.0,
+        epsilon_end=0.05,
+        epsilon_decay=0.995,
+        target_update_freq=100,
+        use_cuda=True,  # Enable CUDA if available
+    )
+
+    # Move model to CPU before saving for compatibility
+    trained_model = trained_model.cpu()
+    
+    # Save the model
+    torch.save(trained_model.state_dict(), "connect_four_model_v2.pth")
+    print("Model saved to connect_four_model_v2.pth")
+    if not trained_model:
+        # Load the model if not trained in this session
+        trained_model = ConnectFourModel()
+        trained_model.load_state_dict(torch.load("connect_four_model_v2.pth", map_location='cpu'))
+        trained_model.eval()
+        print("Model loaded from connect_four_model_v2.pth")
+
+    # Optional: Play against the model
+    play_choice = input(
+        "\nWould you like to play against the trained model? (yes/no): "
+    )
+    
+    if play_choice.lower() in ["yes", "y"]:
+        play_human_vs_model(trained_model, use_blocking=True, verbose=True)
+
+    # Evaluate the trained model
+    eval_results = evaluate_model(trained_model, num_games=100, device='cpu')

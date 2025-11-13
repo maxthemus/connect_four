@@ -11,7 +11,7 @@ from connect_four.game import apply_move, board_to_tensor
 
 # Global variable to store the loaded model
 _model = None
-_model_path = settings.BASE_DIR.parent / 'connect_four_model.pth'
+_model_path = settings.BASE_DIR.parent / 'connect_four_model_v2.pth'
 
 
 def get_model():
@@ -54,7 +54,7 @@ def select_move(model, board, player):
     with torch.no_grad():
         # Prepare board for model (from player's perspective)
         board_input = board * player  # Flip perspective for player -1
-        tensor_board = board_to_tensor(board_input).unsqueeze(0).unsqueeze(0)
+        tensor_board = board_to_tensor(board_input).flatten().unsqueeze(0)
         
         q_values = model(tensor_board).squeeze()
         
@@ -167,7 +167,8 @@ def play_move(request):
             {"error": "Model not found"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-    except Exception:
+    except Exception as e:
+        print(f"Unexpected error: {e}")
         return Response(
             {"error": "Internal server error"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
