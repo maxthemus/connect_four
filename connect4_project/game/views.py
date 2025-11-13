@@ -122,9 +122,9 @@ def play_move(request):
         # Convert board to numpy array
         try:
             board = np.array(board_data, dtype=np.int32)
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError):
             return Response(
-                {"error": f"Invalid board format: {str(e)}"},
+                {"error": "Invalid board format"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -162,13 +162,13 @@ def play_move(request):
             "success": True
         }, status=status.HTTP_200_OK)
         
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         return Response(
-            {"error": f"Model not found: {str(e)}"},
+            {"error": "Model not found"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-    except Exception as e:
+    except Exception:
         return Response(
-            {"error": f"Internal server error: {str(e)}"},
+            {"error": "Internal server error"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
